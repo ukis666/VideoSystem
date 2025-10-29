@@ -1,0 +1,12 @@
+<package format="3">
+  <name>video_system_core</name>
+  <version>0.0.1</version>
+  <description>Core nodes for video system</description>
+  <maintainer email="you@example.com">you</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>video_system_interfaces</depend>
+</package>
