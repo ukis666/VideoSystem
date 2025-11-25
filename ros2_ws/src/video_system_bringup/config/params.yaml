@@ -1,3 +1,0 @@
-image_event_node:
-  ros__parameters:
-    heartbeat_stride: 15

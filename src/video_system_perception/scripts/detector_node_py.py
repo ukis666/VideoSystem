@@ -34,6 +34,9 @@ def generate_launch_description():
                 "conf_threshold": 0.25,
                 "nms_threshold": 0.5,
                 "frame_rate": 15.0,
+                # Homography example (update path and enable when ready)
+                "use_homography": False,
+                "homography_path": "/home/uki/VideoSystem/src/video_system_perception/config/homography_room1.npy",
             }],
         ),
     ])
@@ -56,7 +59,7 @@ COCO_CLASSES = [
 
 
 class DetectorNodePy(RclpyNode):
-    """ONNX Runtime YOLOv8 detector with integrated ByteTrack multi-object tracking."""
+    """ONNX Runtime YOLOv8 detector with ByteTrack MOT and optional homography mapping."""
 
     def __init__(self):
         super().__init__("detector_node_py")
@@ -67,6 +70,10 @@ class DetectorNodePy(RclpyNode):
         self.declare_parameter("conf_threshold", 0.45)
         self.declare_parameter("nms_threshold", 0.50)
         self.declare_parameter("frame_rate", 15.0)
+
+        # Homography parameters
+        self.declare_parameter("use_homography", False)
+        self.declare_parameter("homography_path", "")
 
         self.model_path = (
             self.get_parameter("model_path").get_parameter_value().string_value
@@ -83,6 +90,14 @@ class DetectorNodePy(RclpyNode):
         self.frame_rate = float(
             self.get_parameter("frame_rate").get_parameter_value().double_value
         )
+
+        self.use_homography = (
+            self.get_parameter("use_homography").get_parameter_value().bool_value
+        )
+        self.homography_path = (
+            self.get_parameter("homography_path").get_parameter_value().string_value
+        )
+        self.H = None  # 3x3 homography matrix in float32
 
         if not self.model_path:
             raise RuntimeError("model_path parametresi boş")
@@ -102,6 +117,33 @@ class DetectorNodePy(RclpyNode):
             match_thresh=0.8,
             frame_rate=self.frame_rate,
         )
+
+        # Homography loading
+        if self.use_homography:
+            if not self.homography_path:
+                self.get_logger().error(
+                    "use_homography true ancak homography_path boş; homografi devre dışı bırakılıyor."
+                )
+                self.use_homography = False
+            else:
+                try:
+                    mat = np.load(self.homography_path)
+                    mat = np.asarray(mat, dtype=np.float32)
+                    if mat.shape == (3, 3):
+                        self.H = mat
+                        self.get_logger().info(
+                            f"Homography matrix yüklendi: {self.homography_path}"
+                        )
+                    else:
+                        self.get_logger().error(
+                            f"Geçersiz homografi boyutu {mat.shape}; (3,3) bekleniyor. Homografi devre dışı."
+                        )
+                        self.use_homography = False
+                except Exception as e:
+                    self.get_logger().error(
+                        f"Homografi matrisi yüklenemedi ({self.homography_path}): {e}"
+                    )
+                    self.use_homography = False
 
         # ROS I/O
         self.bridge = CvBridge()
@@ -123,6 +165,28 @@ class DetectorNodePy(RclpyNode):
         self.get_logger().info(
             f"ByteTrack initialized (conf={self.conf_thr}, fps={self.frame_rate})"
         )
+        if self.use_homography and self.H is not None:
+            self.get_logger().info("Homography mapping etkin.")
+
+    def _apply_homography(self, x: float, y: float, w: float, h: float):
+        """Apply homography to the bounding-box center and return (wx, wy) in target plane.
+
+        Returns None if homography is not enabled or numerically invalid.
+        """
+        if not (self.use_homography and self.H is not None):
+            return None
+
+        cx = x + 0.5 * w
+        cy = y + 0.5 * h
+
+        p = np.array([cx, cy, 1.0], dtype=np.float32)
+        pw = self.H @ p
+        if abs(pw[2]) < 1e-6:
+            return None
+
+        wx = float(pw[0] / pw[2])
+        wy = float(pw[1] / pw[2])
+        return wx, wy
 
     def on_image(self, msg: Image) -> None:
         """Image callback: run detection + tracking and publish events."""
@@ -153,9 +217,9 @@ class DetectorNodePy(RclpyNode):
         y_factor = img_h / self.in_h
 
         # Collect raw detections in (x, y, w, h) format
-        boxes_xywh: list[list[int]] = []
-        scores: list[float] = []
-        class_ids: list[int] = []
+        boxes_xywh = []
+        scores = []
+        class_ids = []
 
         for i in range(det.shape[0]):
             cx, cy, w, h = det[i, :4]
@@ -180,7 +244,6 @@ class DetectorNodePy(RclpyNode):
 
         # No detections before NMS
         if not boxes_xywh:
-            # Still update tracker with empty input to age out tracks
             self.tracker.update(
                 output_results=np.empty((0, 5), dtype=np.float32),
                 img_info=(img_w, img_h),
@@ -203,7 +266,6 @@ class DetectorNodePy(RclpyNode):
         )
 
         if len(idxs) == 0:
-            # Update tracker with no valid detections
             self.tracker.update(
                 output_results=np.empty((0, 5), dtype=np.float32),
                 img_info=(img_w, img_h),
@@ -319,9 +381,20 @@ class DetectorNodePy(RclpyNode):
             ev.w = int(w)
             ev.h = int(h)
 
-            # Optional future-proofing: only set if track_id exists in the message definition.
+            # Optional fields depending on message definition
             if hasattr(ev, "track_id"):
                 ev.track_id = int(tid)
+
+            world_xy = self._apply_homography(x, y, w, h)
+            if world_xy is not None:
+                wx, wy = world_xy
+                if hasattr(ev, "world_x"):
+                    ev.world_x = float(wx)
+                if hasattr(ev, "world_y"):
+                    ev.world_y = float(wy)
+                self.get_logger().info(
+                    f"Track {tid} mapped to world coords: ({wx:.3f}, {wy:.3f})"
+                )
 
             self.pub.publish(ev)
 
