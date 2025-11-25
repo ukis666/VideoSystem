@@ -34,7 +34,6 @@ def generate_launch_description():
                 "conf_threshold": 0.25,
                 "nms_threshold": 0.5,
                 "frame_rate": 15.0,
-                # Homography example (update path and enable when ready)
                 "use_homography": False,
                 "homography_path": "/home/uki/VideoSystem/src/video_system_perception/config/homography_room1.npy",
             }],
@@ -314,6 +313,16 @@ class DetectorNodePy(RclpyNode):
             img_size=(img_w, img_h),
         )
 
+        # Guard for empty tracks to avoid IndexError inside cjm_byte_track
+        if len(tracks) == 0:
+            if self.visualize:
+                try:
+                    cv2.imshow("YOLOv8 ORT (preview)", frame)
+                    cv2.waitKey(1)
+                except Exception:
+                    pass
+            return
+
         # Match detections to tracks
         track_ids = [-1] * len(tlbr_boxes)
         track_ids = match_detections_with_tracks(
@@ -355,7 +364,6 @@ class DetectorNodePy(RclpyNode):
         tracked_class_ids = np.asarray(tracked_class_ids, dtype=np.int32)
         tracked_ids = np.asarray(tracked_ids, dtype=np.int32)
 
-        # Log active track IDs for debugging
         self.get_logger().info(f"Active track IDs: {tracked_ids.tolist()}")
 
         # Publish Event messages for tracked detections
@@ -381,7 +389,6 @@ class DetectorNodePy(RclpyNode):
             ev.w = int(w)
             ev.h = int(h)
 
-            # Optional fields depending on message definition
             if hasattr(ev, "track_id"):
                 ev.track_id = int(tid)
 
