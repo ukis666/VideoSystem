@@ -12,13 +12,17 @@ def generate_launch_description():
         ),
         Node(
             package='video_system_perception',
-            executable='detector_node',
-            name='detector_node',
+            executable='detector_node_py',
+            name='detector_node_py',
             output='screen',
             parameters=[{
                 'model_path': '/home/uki/VideoSystem/src/video_system_perception/models/YoloFineTuned.onnx',
                 'visualize': True,
-                'fake_stride': 12
+                'conf_threshold': 0.25,
+                'nms_threshold': 0.5,
+                'frame_rate': 15.0,
+                'use_homography': False,
+                'homography_path': '/home/uki/VideoSystem/src/video_system_perception/config/homography_room1.npy',
             }]
         ),
     ])
