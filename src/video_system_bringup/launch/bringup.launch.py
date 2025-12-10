@@ -16,7 +16,7 @@ def generate_launch_description():
             name='detector_node',
             output='screen',
             parameters=[{
-                'model_path': '/home/uki/VideoSystem/ros2_ws/src/video_system_perception/models/yolov8n.onnx',
+                'model_path': '/home/uki/VideoSystem/src/video_system_perception/models/YoloFineTuned.onnx',
                 'visualize': True,
                 'fake_stride': 12
             }]
