@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node as RclpyNode
 import cv2
 import numpy as np
+from pathlib import Path
 
 from cjm_byte_track.core import BYTETracker
 from cjm_byte_track.matching import match_detections_with_tracks
@@ -14,6 +15,16 @@ import onnxruntime as ort
 
 from launch import LaunchDescription
 from launch_ros.actions import Node as LaunchNode
+
+
+DEFAULT_MODEL_PATH = str(
+    Path.home()
+    / "VideoSystem"
+    / "src"
+    / "video_system_perception"
+    / "models"
+    / "YoloFineTuned.onnx"
+)
 
 
 def generate_launch_description():
@@ -29,7 +40,7 @@ def generate_launch_description():
             package="video_system_perception",
             executable="detector_node_py",
             parameters=[{
-                "model_path": "/home/uki/VideoSystem/src/video_system_perception/models/yolov8n.onnx",
+                "model_path": DEFAULT_MODEL_PATH,
                 "visualize": True,
                 "conf_threshold": 0.25,
                 "nms_threshold": 0.5,
@@ -53,7 +64,7 @@ COCO_CLASSES = [
     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
     "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
     "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-    "hair drier", "toothbrush",
+    "hair drier", "toothbrush", "child",
 ]
 
 
@@ -64,7 +75,7 @@ class DetectorNodePy(RclpyNode):
         super().__init__("detector_node_py")
 
         # Detection parameters
-        self.declare_parameter("model_path", "")
+        self.declare_parameter("model_path", DEFAULT_MODEL_PATH)
         self.declare_parameter("visualize", True)
         self.declare_parameter("conf_threshold", 0.45)
         self.declare_parameter("nms_threshold", 0.50)
