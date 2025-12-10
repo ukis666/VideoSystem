@@ -1,0 +1,28 @@
+<package format="3">
+  <name>video_system_audio</name>
+  <version>0.0.1</version>
+  <description>Audio capture, feature extraction, and event detection nodes.</description>
+  <maintainer email="you@example.com">you</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <build_depend>rclcpp</build_depend>
+  <build_depend>video_system_interfaces</build_depend>
+  <build_depend>alsa</build_depend>
+
+  <build_export_depend>rclcpp</build_export_depend>
+  <build_export_depend>video_system_interfaces</build_export_depend>
+  <build_export_depend>alsa</build_export_depend>
+
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>video_system_interfaces</exec_depend>
+  <exec_depend>alsa</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-librosa</exec_depend>
+  <exec_depend>python3-onnxruntime</exec_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+</package>

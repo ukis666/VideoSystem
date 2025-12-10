@@ -6,7 +6,13 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 
 set(msg_files
+  "msg/Detection.msg"
+  "msg/DetectionArray.msg"
   "msg/Event.msg"
+  "msg/AudioPcm16.msg"
+  "msg/AudioMel.msg"
+  "msg/AudioEvent.msg"
+  "msg/AudioEventArray.msg"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}
