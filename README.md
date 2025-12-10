@@ -62,7 +62,7 @@ VideoSystem/
 │     ├─ package.xml
 │     ├─ CMakeLists.txt
 │     ├─ models/
-│     │  └─ yolov8n.onnx       # YOLOv8n ONNX modeli
+│     │  └─ YoloFineTuned.onnx # İnce ayarlı YOLOv8 ONNX modeli
 │     ├─ config/
 │     │  └─ homography_room1.npy (opsiyonel)
 │     └─ scripts/
@@ -160,7 +160,7 @@ source install/setup.bash
 
 ./install/video_system_perception/lib/video_system_perception/detector_node_py.py \
   --ros-args \
-  -p model_path:="$HOME/VideoSystem/src/video_system_perception/models/yolov8n.onnx" \
+  -p model_path:="$HOME/VideoSystem/src/video_system_perception/models/YoloFineTuned.onnx" \
   -p visualize:=true \
   -p conf_threshold:=0.25 \
   -p frame_rate:=15.0 \
@@ -344,13 +344,13 @@ Eğitilen model, C++ tabanlı VideoSystem içerisinde kullanılmak üzere ONNX f
 model.export(format="onnx", opset=12)
 ```
 
-Çıktı: YoloFineTuned.onnx
+Çıktı: src/video_system_perception/models/YoloFineTuned.onnx ile yolov8n.onnx'in yerini alır
 
 Girdi Boyutu: (1, 3, 640, 640)
 
 Çıktı Boyutu: (1, 85, 8400) -> (4 Kutu Koordinatı + 81 Sınıf Olasılığı)
 
-Dağıtım (Deployment): Oluşturulan best.onnx dosyası, sistemdeki src/video_system_perception/models/yolov8n.onnx ile değiştirilir. Sistem mantığında ID 80, "child" etiketiyle eşleştirilir.
+Dağıtım (Deployment): Oluşturulan best.onnx dosyası, sistemdeki src/video_system_perception/models/YoloFineTuned.onnx ile değiştirilir. Sistem mantığında ID 80, "child" etiketiyle eşleştirilir.
 
 ---
 
