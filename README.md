@@ -240,7 +240,121 @@ world_y: 2.34
 
 ---
 
-## 9. Katkı ve İletişim
+## 9. YOLOv8 Fine-Tuning Süreci (COCO + CDD)
+
+Bu bölüm, VideoSystem projesi için YOLOv8n temel modelinin nasıl özelleştirildiğini anlatır. Süreç, modelin genel ev eşyalarını (COCO yetenekleri) tanımasını korurken, çocukları (child) yetişkinlerden (person) ayırt etmesini sağlamak üzere kurgulanmıştır.
+
+### 9.1 Amaç
+Sistemin, standart COCO nesnelerini (yatak, koltuk, vb.) tespit etmeye devam etmesi, ancak `person` sınıfını sadece yetişkinler için kullanıp, çocuklar için yeni bir `child` sınıfı oluşturması hedeflenmiştir.
+
+* **Toplam Sınıf Sayısı:** 81
+* **Yapı:**
+    * Index `0-79`: Standart COCO sınıfları (Mevcut yetenekler korundu).
+    * Index `80`: **child** (Yeni eklenen sınıf).
+---
+
+### 9.2 Veri Toplama ve Hazırlık
+Eğitim verisi hibrit bir yapıdan oluşmaktadır:
+
+1.  **COCO 2017 Veri Seti (Temel):**
+    * Ev eşyaları (`bed`, `chair`, `tv`, `bottle`) ve genel yetişkin tespiti için kullanıldı.
+2.  **Kaggle Child Detection Dataset (CDD):**
+    * **Kaynak:** [Kaggle Child Detection Dataset - Samuel Diop](https://www.kaggle.com/datasets/samueldiop/child-detection-dataset)
+    * **Özellikler:** Balkon, yatak odası, salon gibi çeşitli ev ortamlarında çekilmiş, 0-12 yaş arası çocukların yüksek kaliteli görsellerini içerir.
+    * **Filtreleme:** Aşırı tekrar eden kareler (burst shots) ve oyuncak bebek/robot içeren görseller overfitting'i önlemek adına veri setinden çıkarılmıştır.
+---
+
+### 9.3 Veri Temizleme ve Ayrıştırma Stratejisi (Kritik Adım)
+Modelin "Küçük Yetişkin" ile "Çocuk" kavramlarını karıştırmaması için özel bir veri mühendisliği stratejisi izlenmiştir:
+
+* **COCO Person Sınıfı Manipülasyonu:** Standart COCO veri setindeki `person` sınıfı, varsayılan olarak hem çocukları hem de yetişkinleri kapsamaktadır. Modelin kafa karışıklığını önlemek (confusion) için, COCO içerisindeki belirgin çocuk örnekleri analiz edilerek `person` sınıfından çıkarılmış veya etiketleri `child` (ID 80) olarak güncellenmiştir.
+* **Yeni Sınıf İnşası:** Temizlenen bu yapı üzerine Kaggle CDD veri seti eklenmiştir. Böylece model için şu ayrım netleştirilmiştir:
+    * `0: person` -> Sadece Yetişkinler.
+    * `80: child` -> Sadece Çocuklar.
+---
+
+### 9.4 Veri Seti Birleştirme ve Format
+Kaggle CDD anotasyonları YOLO formatına dönüştürülmüş ve temizlenmiş COCO verisi ile birleştirilmiştir.
+
+**Data.yaml Konfigürasyonu:**
+```yaml
+path: /content/datasets/nannycam_coco81
+train: images/train
+val: images/val
+
+nc: 81
+names:
+  0: person  # Yetişkinler (Adults)
+  1: bicycle
+  # ... (Diğer 78 COCO sınıfı) ...
+  79: toothbrush
+  80: child  # Çocuklar (Children)
+
+```
+---
+
+### 9.5 Eğitim Konfigürasyonu
+Model, uç cihazlarda (Raspberry Pi/Jetson) çalışabilmesi için YOLOv8n (Nano) mimarisi seçilerek, NVIDIA A100 GPU üzerinde eğitilmiştir.
+
+Epochs: 40
+
+Görüntü Boyutu: 640x640
+
+Batch Size: 16
+
+Optimizer: Auto (AdamW)
+
+```bash
+from ultralytics import YOLO
+
+# Pre-trained nano model yüklenir
+model = YOLO("yolov8n.pt") 
+
+# 81 sınıf ile eğitim başlatılır
+results = model.train(
+    data="/content/datasets/nannycam_coco81/data.yaml",
+    epochs=40,
+    time=None,
+    patience=100,
+    batch=16,
+    imgsz=640,
+    project="/content/runs/detect",
+    name="nannycam_coco81_v15",
+    pretrained=True
+)
+```
+---
+
+### 9.6 Model Değerlendirme ve Metrikler
+40 epoch sonunda model kararlı bir yakınsama (convergence) sergilemiştir. Metrikler, modelin güvenlik kamerası senaryoları için dengeli bir performans sunduğunu göstermektedir.
+
+| Metrik | Değer | Açıklama |
+| :--- | :---: | :--- |
+| **mAP50** | **0.782** | %50 IoU'da Ortalama Kesinlik. Nano bir model için oldukça yüksek bir başarı oranı. |
+| **mAP50-95** | **0.405** | Daha katı pozisyonel doğruluk. Takip algoritmaları için kabul edilebilir seviyede. |
+| **Precision** | **0.727** | "Çocuk" olarak yapılan tespitlerin %72.7'si doğru (False Positive oranı düşük). |
+| **Recall** | **0.764** | Model, sahnedeki çocukların %76.4'ünü başarıyla yakalıyor (False Negative oranı optimize edilebilir). |
+
+---
+
+### 9.7 ONNX Export ve Entegrasyon
+Eğitilen model, C++ tabanlı VideoSystem içerisinde kullanılmak üzere ONNX formatına dönüştürülmüştür.
+
+```bash
+model.export(format="onnx", opset=12)
+```
+
+Çıktı: YoloFineTuned.onnx
+
+Girdi Boyutu: (1, 3, 640, 640)
+
+Çıktı Boyutu: (1, 85, 8400) -> (4 Kutu Koordinatı + 81 Sınıf Olasılığı)
+
+Dağıtım (Deployment): Oluşturulan best.onnx dosyası, sistemdeki src/video_system_perception/models/yolov8n.onnx ile değiştirilir. Sistem mantığında ID 80, "child" etiketiyle eşleştirilir.
+
+---
+
+## 10. Katkı ve İletişim
 
 Pull request ve issue’lar memnuniyetle karşılanır.
 
