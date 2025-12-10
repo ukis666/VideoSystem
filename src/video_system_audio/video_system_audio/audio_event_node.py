@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import onnxruntime as ort
 import rclpy
 from rclpy.node import Node
 
+from builtin_interfaces.msg import Time
 from video_system_interfaces.msg import AudioEvent, AudioEventArray, AudioMel
 
 
 @dataclass
 class EventState:
     active: bool = False
-    start_time = None
+    start_time: Optional[Time] = None
     frames_above: int = 0
 
 
